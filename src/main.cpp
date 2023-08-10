@@ -12,7 +12,7 @@ int main(){
 
     clock_t start_time, end_time, mc_start, mc_end, index_start, index_end, vc_start, vc_end;   
     start_time=clock();
-    Graph g("epi/");
+    Graph g("last/");
     // generate_queries(g, 1000);
     // // g.statistics();
     // // g.degreeSort();
@@ -71,18 +71,5 @@ int main(){
 //     indexOutput(g, h);
     // readIndex(g, h, dc);
     // indexQuery(g, dc, h);
-
-
-
-    // string ss = "-0.1234";
-    // cout<<atof(ss.c_str())<<endl;
-    // cout<<ss.substr(0,3)<<endl;
-    // cout<<ss.substr(0,ss.size())<<endl;
-    // cout<<ss.substr(2,ss.size())<<endl;
-    // cout<<atoi(ss.c_str())<<endl;
-    // cout<<to_string(atof(ss.c_str()))<<endl;
-    // cout<<to_string(atoi(ss.c_str()))<<endl;
-
-
     return 0;
 }
