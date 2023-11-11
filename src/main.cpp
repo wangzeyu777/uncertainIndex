@@ -28,8 +28,10 @@ int main(){
     // nmc(g, 10000, dc);
     // BSS_(g, 1000, dc);
     // RSS_(g, 1000, dc);
+    // LPS_(g, 1000, dc);
     // BSS(g, 1000, dc);
     // RSS(g, 1000, dc);
+    // LPS(g, 1000, dc);
 
     // while (true){
     //     int s, t;

@@ -1,4 +1,12 @@
 // #include "graph.h"
+double countIndex(Graph &g){
+    double r = 0;
+    for(int i=0; i<g.n; i++){
+        r += g.Lb[i].size();
+        r += g.Lf[i].size();
+    }
+    return r/g.n;
+}
 
 int situation(Graph &g, int &s, int &t){
     clock_t t1, t2;
@@ -536,7 +544,7 @@ vector<double> nmc_query(Graph &g, int s, int t, int d, int size){
     vector<bool> visited = vector<bool>(g.n, false);
     vector<int> dis = vector<int>(g.n, -1);
     bool flag = false;
-    srand(time(0));
+    // srand(time(0));
     for(int i = 0; i<size; i++){
         fill(dis.begin(), dis.end(), -1);
         fill(visited.begin(),visited.end(),false);
@@ -903,6 +911,172 @@ void RSS(Graph &g, int K, int d){
 
 
 
+// LPS的准备工作：生成一个几何采样的值
+int Geo(double p){
+    // srand(unsigned(time(NULL)));
+    int num = 0;
+    double randDouble = rand()%MAX/(double)(MAX+1);
+    double sum = 0;
+    while (true)
+    {
+        num++;
+        sum += 1.0*pow(1-p, num-1)*p;
+        // cout<<sum<<' ';
+        if (randDouble<sum)
+        break;
+    }
+    num -= 1;
+    // num = rand()%(int)(2);
+    return num;
+}
+
+bool compareHv(vector<double> a, vector<double> b){
+	return (int)a[1]<(int)b[1];
+}
+
+
+// LPS方法查询query
+vector<double> LPS_query(Graph &g, int s, int t, int d, int size){
+    vector<double> res = vector<double>(3, 0);
+    deque<int> q;
+    vector<int> cv = vector<int>(g.n, -1);
+    vector<deque<vector<double>>> hv = vector<deque<vector<double>>>(g.n ,deque<vector<double>>());
+    vector<bool> visited = vector<bool>(g.n, false);
+    vector<bool> init = vector<bool>(g.n, false);
+    vector<int> dis = vector<int>(g.n, -1);
+    vector<int> reach;
+    bool flag = false;
+    if(s==t){
+        res[0] = 1;
+        res[1] = 0;
+        res[2] = 1;
+        return res;
+    }
+    for(int i = 0; i < size; i++){
+        fill(visited.begin(),visited.end(),false);
+        fill(dis.begin(), dis.end(), -1);
+        q.clear();
+        q.push_back(s);
+        visited[s] = true;
+        flag = false;
+        dis[s] = 0;
+        while (!q.empty()){
+            int node = q.front();
+            q.pop_front();
+            if (!init[node]){
+                // cout<<"Initiating node "<<node<<endl;
+                cv[node] = 0;
+                hv[node].clear();
+                for(auto nbr: g.outneighbors[node]){
+                    int geo = Geo(nbr.second);
+                    hv[node].push_back({(double)nbr.first, (double)(geo+cv[node]), nbr.second});
+                    // cout<<"Create new pair "<<nbr.first<<' '<<geo<<endl;
+                }
+                init[node] = true;
+                sort(hv[node].begin(), hv[node].end(), compareHv);
+            }
+            // cout<<"Now visiting node "<<node<<" in round "<<i<<", its cv now is: "<<cv[node]<<", out_degree is "<<g.outdegree[node]<<endl;
+            // cout<<"Its neighbors(hv) now is: "<<endl;
+            // for(auto it:hv[node]){
+            //     cout<<it[0]<<' '<<it[1]<<endl;
+            // }
+            if(g.outdegree[node]==0) {cv[node] += 1; continue;}
+            while ((int)hv[node].front()[1]==cv[node]){
+                vector<double> it = hv[node].front();
+                hv[node].pop_front();
+                // cout<<"Pop an Hv pair: "<<it[0]<<' '<<it[1]<<endl;
+                if(!visited[it[0]]){
+                    dis[(int)it[0]] = dis[node]+1;
+                    q.push_back((int)it[0]);
+                    visited[(int)it[0]] = true;
+                    // cout<<"Round "<<i<<", visiting "<<node<<", push "<<it[0]<<" in hv, its cv: "<<cv[it[0]]<<endl;
+                    // cout<<"Push "<<it[0]<<" in hv, its cv: "<<cv[it[0]]<<", Round "<<i<<endl;
+                }
+                int newX = Geo(it[2]);
+                hv[node].push_back({it[0], (double)(newX+cv[node]+1), it[2]});
+                // cout<<"Round "<<i<<", change "<<node<<" of neighbor "<<it[0]<<" from "<<it[1]<<" to "<<(double)(newX+cv[node]+1)<<endl;
+                sort(hv[node].begin(), hv[node].end(), compareHv);
+                if(it[0]==t){
+                    flag = true;
+                    reach.push_back(dis[t]);
+                    // cout<<"Found on round "<<i<<endl;
+                    // break;
+                }
+            }
+            cv[node] += 1;
+            if(flag) break;
+            // cout<<"Node is "<<node<<", now cv is "<<cv[node]<<endl;
+        }
+        
+    }
+    res[0] = 1.0*reach.size()/size;
+    int sum = 0, cnt = 0;
+    for(int i = 0; i<reach.size(); i++){
+        if(reach[i]<=d) cnt++;
+        sum += reach[i];
+    }
+    if(!reach.size()) res[1] = 0;
+    else res[1] = 1.0*sum/reach.size();
+    res[2] = 1.0*cnt/size;
+    // for(auto it:res)
+    //     cout<<it<<' ';
+    // cout<<endl;
+    // cout<<endl;
+    // for(int i=0; i<g.n; i++){
+    //     if(cv[i]>50)
+    //         cout<<i<<' '<<cv[i]<<endl;
+    // }
+    return res;
+}
+
+void LPS(Graph &g, int K, int d){
+    ifstream file;
+    file.open(g.folder+g.graph_file+"queries.txt");
+    // ofstream of(g.folder+g.graph_file+"LP+_results_"+to_string(K)+".txt",ios::ate);
+    if(!file)
+        handle_error("open");
+    string str;
+    int s, t;
+    int cnt = 0;
+    clock_t t0, t1;
+    t0 = clock();
+    while(getline(file,str)){
+        int size=str.size();
+        for(int i=0;i<size;i++){
+            if(str[i]==' '){
+                s=atoi(str.substr(0,i).c_str());
+                t=atoi(str.substr(i+1,size).c_str());
+                break;
+            }
+        }
+        vector<double> res = LPS_query(g, s, t, d, K);
+        // of<<res[0]<<' '<<res[1]<<' '<<res[2]<<endl;
+        cnt++;
+        // if(cnt>0)break;
+        // if(cnt%50==0)
+        cout<<cnt<<" Query between "<<s<<" and "<<t<<", Reliability: "<<res[0]<<", ERD: "<<res[1]<<", DCR: "<<res[2]<<endl;
+        if(cnt==100)break;
+    }
+    t1 = clock();
+    cout<<"Average LP+ time: "<<(double)(t1-t0)/CLOCKS_PER_SEC/cnt<<"s"<<endl;
+    file.close();
+    // of.close();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -917,7 +1091,7 @@ double nmcR(Graph &g, int &s, int &t, int size){
     int cnt = 0;
     deque<int> q;
     vector<bool> visited = vector<bool>(g.n, false);
-    srand(time(0));
+    // srand(time(0));
     for(int i = 0; i<size; i++){
         fill(visited.begin(),visited.end(),false);
         q.clear();
@@ -951,7 +1125,7 @@ double nmcERD(Graph &g, int &s, int &t, int size){
     deque<int> q;
     vector<bool> visited = vector<bool>(g.n, false);
     vector<int> dis = vector<int>(g.n, 0);
-    srand(time(0));
+    // srand(time(0));
     for(int i = 0; i<size; i++){
         fill(visited.begin(),visited.end(),false);
         fill(dis.begin(), dis.end(), -1);
@@ -990,7 +1164,7 @@ double nmcDCR(Graph &g, int &s, int &t, int dc, int size){
     deque<int> q;
     vector<bool> visited = vector<bool>(g.n, false);
     vector<int> dis = vector<int>(g.n, 0);
-    srand(time(0));
+    // srand(time(0));
     for(int i = 0; i<size; i++){
         fill(visited.begin(),visited.end(),false);
         fill(dis.begin(), dis.end(), -1);
@@ -1192,7 +1366,7 @@ void BSS_(Graph &g, int K, int d){
         // if(cnt>2)break;
         // if(cnt%50==0)
         cout<<cnt<<" Query between "<<s<<" and "<<t<<", Reliability: "<<res[0]<<", ERD: "<<res[1]<<", DCR: "<<res[2]<<endl;
-        if(cnt==100)break;
+        if(cnt==50)break;
     }
     // t1 = clock();
     cout<<"Average BSS query time:"<<(g.BSS_R+g.BSS_ERD+g.BSS_DCR)/cnt<<"s"<<endl;
@@ -1394,7 +1568,288 @@ void RSS_(Graph &g, int K, int d){
         // if(cnt>2)break;
         // if(cnt%50==0)
         cout<<cnt<<" Query between "<<s<<" and "<<t<<", Reliability: "<<res[0]<<", ERD: "<<res[1]<<", DCR: "<<res[2]<<endl;
-        if(cnt==100)break;
+        if(cnt==20)break;
+    }
+    // t1 = clock();
+    cout<<"Average RSS query time:"<<(g.RSS_R+g.RSS_ERD+g.RSS_DCR)/cnt<<"s"<<endl;
+    cout<<"Reliability query: "<<g.RSS_R/cnt<<"s"<<endl;
+    cout<<"ERD query: "<<g.RSS_ERD/cnt<<"s"<<endl;
+    cout<<"DCR query: "<<g.RSS_DCR/cnt<<"s"<<endl;
+    file.close();
+    of.close();
+}
+
+
+
+
+double LPSR(Graph &g, int &s, int &t, int size, int b){
+    double r = 0;
+    deque<int> q;
+    vector<int> cv = vector<int>(g.n, -1);
+    vector<deque<vector<double>>> hv = vector<deque<vector<double>>>(g.n ,deque<vector<double>>());
+    vector<bool> visited = vector<bool>(g.n, false);
+    vector<bool> init = vector<bool>(g.n, false);
+    vector<int> reach;
+    bool flag = false;
+    if(s==t){
+        return 1;
+    }
+    for(int i = 0; i < size; i++){
+        fill(visited.begin(),visited.end(),false);
+        q.clear();
+        q.push_back(s);
+        visited[s] = true;
+        flag = false;
+        while (!q.empty()){
+            int node = q.front();
+            q.pop_front();
+            if (!init[node]){
+                cv[node] = 0;
+                hv[node].clear();
+                for(auto nbr: g.outneighbors[node]){
+                    int geo = Geo(nbr.second);
+                    hv[node].push_back({(double)nbr.first, (double)(geo+cv[node]), nbr.second});
+                }
+                init[node] = true;
+                sort(hv[node].begin(), hv[node].end(), compareHv);
+            }
+            if(g.outdegree[node]==0) {cv[node] += 1; continue;}
+            while ((int)hv[node].front()[1]==cv[node]){
+                vector<double> it = hv[node].front();
+                hv[node].pop_front();
+                // cout<<"Pop an Hv pair: "<<it[0]<<' '<<it[1]<<endl;
+                if(!visited[it[0]]){
+                    q.push_back((int)it[0]);
+                    visited[(int)it[0]] = true;
+                }
+                int newX = Geo(it[2]);
+                hv[node].push_back({it[0], (double)(newX+cv[node]+1), it[2]});
+                sort(hv[node].begin(), hv[node].end(), compareHv);
+                if(it[0]==t){
+                    flag = true;
+                }
+            }
+            cv[node] += 1;
+            if(flag) break;
+        }
+        
+    }
+    r = 1.0*reach.size()/size;
+    return r;
+}
+
+double LPSERD(Graph &g, int &s, int &t, int size, int b){
+    double erd = 0;
+    deque<int> q;
+    vector<int> cv = vector<int>(g.n, -1);
+    vector<deque<vector<double>>> hv = vector<deque<vector<double>>>(g.n ,deque<vector<double>>());
+    vector<bool> visited = vector<bool>(g.n, false);
+    vector<bool> init = vector<bool>(g.n, false);
+    vector<int> dis = vector<int>(g.n, -1);
+    vector<int> reach;
+    bool flag = false;
+    if(s==t){
+        return 0;
+    }
+    for(int i = 0; i < size; i++){
+        fill(visited.begin(),visited.end(),false);
+        fill(dis.begin(), dis.end(), -1);
+        q.clear();
+        q.push_back(s);
+        visited[s] = true;
+        flag = false;
+        dis[s] = 0;
+        while (!q.empty()){
+            int node = q.front();
+            q.pop_front();
+            if (!init[node]){
+                // cout<<"Initiating node "<<node<<endl;
+                cv[node] = 0;
+                hv[node].clear();
+                for(auto nbr: g.outneighbors[node]){
+                    int geo = Geo(nbr.second);
+                    hv[node].push_back({(double)nbr.first, (double)(geo+cv[node]), nbr.second});
+                    // cout<<"Create new pair "<<nbr.first<<' '<<geo<<endl;
+                }
+                init[node] = true;
+                sort(hv[node].begin(), hv[node].end(), compareHv);
+            }
+            // cout<<"Now visiting node "<<node<<" in round "<<i<<", its cv now is: "<<cv[node]<<", out_degree is "<<g.outdegree[node]<<endl;
+            // cout<<"Its neighbors(hv) now is: "<<endl;
+            // for(auto it:hv[node]){
+            //     cout<<it[0]<<' '<<it[1]<<endl;
+            // }
+            if(g.outdegree[node]==0) {cv[node] += 1; continue;}
+            while ((int)hv[node].front()[1]==cv[node]){
+                vector<double> it = hv[node].front();
+                hv[node].pop_front();
+                // cout<<"Pop an Hv pair: "<<it[0]<<' '<<it[1]<<endl;
+                if(!visited[it[0]]){
+                    dis[(int)it[0]] = dis[node]+1;
+                    q.push_back((int)it[0]);
+                    visited[(int)it[0]] = true;
+                    // cout<<"Round "<<i<<", visiting "<<node<<", push "<<it[0]<<" in hv, its cv: "<<cv[it[0]]<<endl;
+                    // cout<<"Push "<<it[0]<<" in hv, its cv: "<<cv[it[0]]<<", Round "<<i<<endl;
+                }
+                int newX = Geo(it[2]);
+                hv[node].push_back({it[0], (double)(newX+cv[node]+1), it[2]});
+                // cout<<"Round "<<i<<", change "<<node<<" of neighbor "<<it[0]<<" from "<<it[1]<<" to "<<(double)(newX+cv[node]+1)<<endl;
+                sort(hv[node].begin(), hv[node].end(), compareHv);
+                if(it[0]==t){
+                    flag = true;
+                    reach.push_back(dis[t]);
+                    // cout<<"Found on round "<<i<<endl;
+                    // break;
+                }
+            }
+            cv[node] += 1;
+            if(flag) break;
+            // cout<<"Node is "<<node<<", now cv is "<<cv[node]<<endl;
+        }
+        
+    }
+    int sum = 0;
+    for(int i = 0; i<reach.size(); i++){
+        sum += reach[i];
+    }
+    if(!reach.size()) erd = 0;
+    else erd = 1.0*sum/reach.size();
+    return erd;
+}
+
+double LPSDCR(Graph &g, int &s, int &t, int &d, int size, int b){
+    double dcr = 0;
+    deque<int> q;
+    vector<int> cv = vector<int>(g.n, -1);
+    vector<deque<vector<double>>> hv = vector<deque<vector<double>>>(g.n ,deque<vector<double>>());
+    vector<bool> visited = vector<bool>(g.n, false);
+    vector<bool> init = vector<bool>(g.n, false);
+    vector<int> dis = vector<int>(g.n, -1);
+    vector<int> reach;
+    bool flag = false;
+    if(s==t){
+        return 1;
+    }
+    for(int i = 0; i < size; i++){
+        fill(visited.begin(),visited.end(),false);
+        fill(dis.begin(), dis.end(), -1);
+        q.clear();
+        q.push_back(s);
+        visited[s] = true;
+        flag = false;
+        dis[s] = 0;
+        while (!q.empty()){
+            int node = q.front();
+            q.pop_front();
+            if (!init[node]){
+                // cout<<"Initiating node "<<node<<endl;
+                cv[node] = 0;
+                hv[node].clear();
+                for(auto nbr: g.outneighbors[node]){
+                    int geo = Geo(nbr.second);
+                    hv[node].push_back({(double)nbr.first, (double)(geo+cv[node]), nbr.second});
+                    // cout<<"Create new pair "<<nbr.first<<' '<<geo<<endl;
+                }
+                init[node] = true;
+                sort(hv[node].begin(), hv[node].end(), compareHv);
+            }
+            if(g.outdegree[node]==0) {cv[node] += 1; continue;}
+            while ((int)hv[node].front()[1]==cv[node]){
+                vector<double> it = hv[node].front();
+                hv[node].pop_front();
+                // cout<<"Pop an Hv pair: "<<it[0]<<' '<<it[1]<<endl;
+                if(!visited[it[0]]){
+                    dis[(int)it[0]] = dis[node]+1;
+                    q.push_back((int)it[0]);
+                    visited[(int)it[0]] = true;
+                }
+                int newX = Geo(it[2]);
+                hv[node].push_back({it[0], (double)(newX+cv[node]+1), it[2]});
+                // cout<<"Round "<<i<<", change "<<node<<" of neighbor "<<it[0]<<" from "<<it[1]<<" to "<<(double)(newX+cv[node]+1)<<endl;
+                sort(hv[node].begin(), hv[node].end(), compareHv);
+                if(it[0]==t){
+                    flag = true;
+                    reach.push_back(dis[t]);
+                    // cout<<"Found on round "<<i<<endl;
+                    // break;
+                }
+            }
+            cv[node] += 1;
+            if(flag) break;
+            // cout<<"Node is "<<node<<", now cv is "<<cv[node]<<endl;
+        }
+        
+    }
+    int cnt = 0;
+    for(int i = 0; i<reach.size(); i++){
+        if(reach[i]<=d) cnt++;
+    }
+    dcr = 1.0*cnt/size;
+    return dcr;
+}
+
+
+vector<double> LPSQUERY(Graph &g, int s, int t, int d, int size){
+    // cout<<"Size: "<<size<<endl;
+    vector<double> res = vector<double>(3,0);
+    clock_t t1, t2;
+    double r, e, c;
+    if (s>=g.n || t>=g.n)
+        handle_error("Vertex does not exist.");
+    t1 = clock();
+    r = LPSR(g, s, t, size, s);
+    t2 = clock();
+    g.RSS_R += (double)(t2-t1)/CLOCKS_PER_SEC;
+    // cout<<"Reliability query "<<s<<' '<<t<<": "<<r<<endl;
+
+    t1 = clock();
+    e = LPSERD(g, s, t, size, s);
+    // double e1 = ERD_min(g,s,t);
+    // double e2 = ERD_max(g,s,t);
+    t2 = clock();
+    g.RSS_ERD += (double)(t2-t1)/CLOCKS_PER_SEC;
+    // cout<<"Expected Reliable Distance query "<<s<<' '<<t<<": "<<e[0]<<','<<e[1]<<endl;
+
+    t1 = clock();
+    c = LPSDCR(g, s, t, d, size, s);
+    t2 = clock();
+    g.RSS_DCR += (double)(t2-t1)/CLOCKS_PER_SEC;
+    // cout<<"Distance Constrained Reliability query "<<s<<' '<<t<<": "<<c<<endl;
+    // cout<<"Reliability: "<<r<<"\nExpected Reliable Distance: "<<e[0]<<", "<<e[1]<<"\nDistance Constrained Reliability: "<<c<<endl;
+    res[0] = r;
+    res[1] = e;
+    res[2] = c;
+    return res;
+}
+
+
+void LPS_(Graph &g, int K, int d){
+    ifstream file;
+    file.open(g.folder+g.graph_file+"queries.txt");
+    ofstream of(g.folder+g.graph_file+"LPSresults.txt",ios::ate);
+    if(!file)
+        handle_error("open");
+    string str;
+    int s, t;
+    int cnt = 0;
+    // clock_t t0, t1;
+    // t0 = clock();
+    while(getline(file,str)){
+        int size=str.size();
+        for(int i=0;i<size;i++){
+            if(str[i]==' '){
+                s=atoi(str.substr(0,i).c_str());
+                t=atoi(str.substr(i+1,size).c_str());
+                break;
+            }
+        }
+        vector<double> res = LPSQUERY(g, s, t, d, K);
+        of<<res[0]<<' '<<res[1]<<' '<<res[2]<<endl;
+        cnt++;
+        // if(cnt>2)break;
+        // if(cnt%50==0)
+        cout<<cnt<<" Query between "<<s<<" and "<<t<<", Reliability: "<<res[0]<<", ERD: "<<res[1]<<", DCR: "<<res[2]<<endl;
+        if(cnt==20)break;
     }
     // t1 = clock();
     cout<<"Average RSS query time:"<<(g.RSS_R+g.RSS_ERD+g.RSS_DCR)/cnt<<"s"<<endl;
